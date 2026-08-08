@@ -1,0 +1,11 @@
+test/data/
+node_modules/
+.DS_Store
+
+# Index build artefacts. The published index lives on Hugging Face:
+# https://huggingface.co/datasets/sokrypton/afdb-msa-index
+index/
+shards/
+*.fasta
+*.fasta.gz
+*.a3m

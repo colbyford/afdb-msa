@@ -1,0 +1,170 @@
+:root {
+  --bg: #ffffff;
+  --panel: #f7f8fa;
+  --border: #dfe3e8;
+  --fg: #1b1f24;
+  --muted: #6b7480;
+  --accent: #2f6fd0;
+  --accent-fg: #ffffff;
+  --warn-bg: #fff6e5;
+  --warn-fg: #7a4b00;
+  --err: #c0392b;
+  --ok: #1e7a46;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --panel: #1c2027;
+    --border: #2c333c;
+    --fg: #e6e9ee;
+    --muted: #97a0ac;
+    --accent: #5b9bf0;
+    --accent-fg: #0d1014;
+    --warn-bg: #3a2f14;
+    --warn-fg: #f0c674;
+    --err: #ef6a5c;
+    --ok: #64c98a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 1rem 4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+header, main, footer { max-width: 900px; margin: 0 auto; }
+
+header { padding: 2.5rem 0 1.5rem; }
+h1 { margin: 0 0 .5rem; font-size: 1.9rem; letter-spacing: -.02em; }
+h2 { margin: 0 0 .75rem; font-size: 1.15rem; }
+.tagline { margin: .35rem 0; max-width: 62ch; }
+
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: .9em; }
+
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.err { color: var(--err); }
+.ok { color: var(--ok); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+}
+
+summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: .85rem; }
+
+.field-label { display: block; font-weight: 600; margin-bottom: .5rem; }
+
+textarea, input, select {
+  width: 100%;
+  font-family: inherit;
+  font-size: .92rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .5rem .6rem;
+}
+textarea { font-family: var(--mono); font-size: .85rem; resize: vertical; }
+textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: .9rem 1.1rem;
+}
+.grid label { display: block; font-size: .88rem; font-weight: 600; }
+.grid input, .grid select { margin-top: .3rem; }
+.hint { display: block; margin-top: .3rem; font-weight: 400; font-size: .8rem; color: var(--muted); }
+label.check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .15rem .5rem;
+  align-items: center;
+  align-self: start;
+}
+label.check input { width: auto; margin: 0; }
+/* the hint belongs under both, not squeezed beside the label text */
+label.check .hint { grid-column: 1 / -1; margin-top: .1rem; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .6rem; }
+.examples { font-size: .85rem; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  padding: .45rem .9rem;
+}
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+button.ghost { background: transparent; }
+button.link {
+  background: none; border: none; padding: 0;
+  color: var(--accent); text-decoration: underline; font-size: .85rem;
+}
+
+.panel.run { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.status { font-size: .88rem; color: var(--muted); }
+.status.err { color: var(--err); }
+.status.ok { color: var(--ok); }
+
+pre#log {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: .78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+
+table.hits {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .84rem;
+  margin-bottom: .75rem;
+  display: block;
+  overflow-x: auto;
+}
+table.hits th, table.hits td {
+  text-align: left;
+  padding: .35rem .6rem .35rem 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+table.hits th { color: var(--muted); font-weight: 600; }
+table.hits td.num { font-family: var(--mono); }
+
+.stats { font-size: .9rem; margin: .6rem 0; }
+
+.warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border-radius: 6px;
+  padding: .5rem .7rem;
+  font-size: .85rem;
+  margin: 0 0 .7rem;
+}
+
+footer { margin-top: 2rem; font-size: .82rem; color: var(--muted); }
+footer a { color: var(--muted); }

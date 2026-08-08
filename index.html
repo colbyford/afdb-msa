@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFDB MSA &mdash; borrow an AlphaFold DB alignment for your sequence</title>
+<meta name="description" content="Paste a protein sequence, BLAST it against UniProt, and get back the AlphaFold DB MSA re-indexed onto your query as a single or paired a3m.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>AFDB MSA</h1>
+  <p class="tagline">
+    Paste a sequence. The closest entry in AlphaFold DB is found, its precomputed
+    alignment is re-indexed onto your query's numbering, and you get an
+    <code>a3m</code> back &mdash; paired across chains if you give more than one.
+    No alignment is computed: AFDB already did it.
+  </p>
+  <p class="tagline muted">
+    Runs entirely in your browser. An exact sequence resolves by checksum in about a second; anything else is
+    looked up in a static index of 239.6M
+    <a href="https://alphafold.ebi.ac.uk/" target="_blank" rel="noopener">AlphaFold DB</a> entries using a few dozen
+    ranged reads (~50&nbsp;KB), with
+    <a href="https://www.ebi.ac.uk/jdispatcher/" target="_blank" rel="noopener">EBI BLAST</a> behind it as a fallback.
+    No server, nothing uploaded anywhere else.
+  </p>
+</header>
+
+<main>
+
+<section class="panel">
+  <label class="field-label" for="seq">Query sequence(s)</label>
+  <textarea id="seq" spellcheck="false" rows="7"
+    placeholder="Paste one or more protein sequences.&#10;FASTA, or plain sequence with ':' between chains."></textarea>
+  <div class="row examples">
+    <span class="muted">examples:</span>
+    <button class="link" data-example="hba">haemoglobin &alpha;</button>
+    <button class="link" data-example="hbab">haemoglobin &alpha;:&beta; (paired)</button>
+    <button class="link" data-example="ubq">ubiquitin</button>
+    <button class="link" data-example="clear">clear</button>
+  </div>
+  <div id="seq-summary" class="muted small"></div>
+</section>
+
+<section class="panel">
+  <details open>
+    <summary>Search</summary>
+    <div class="grid">
+      <label>Email
+        <input type="email" id="email" placeholder="you@example.org" autocomplete="email">
+        <span class="hint">Required by EBI, but only when a BLAST search actually runs.</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="tryexact" checked>
+        Exact-match shortcut
+        <span class="hint">Look the sequence up in UniParc by checksum first (~0.4&nbsp;s). Hits skip BLAST entirely.</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="useindex" checked>
+        Use the static index
+        <span class="hint">239.6M AlphaFold DB entries, searched with a few dozen ranged reads (~50&nbsp;KB, ~1&nbsp;ms). Falls back to BLAST automatically.</span>
+      </label>
+      <label>Index location
+        <input type="text" id="indexurl" value="https://huggingface.co/datasets/sokrypton/afdb-msa-index/resolve/main">
+        <span class="hint">Defaults to the published <a href="https://huggingface.co/datasets/sokrypton/afdb-msa-index" target="_blank" rel="noopener">239.6M-entry index</a> on Hugging&nbsp;Face. Blank disables it.</span>
+      </label>
+      <label>Candidates to align
+        <input type="number" id="topk" value="20" min="5" max="200">
+        <span class="hint">The index ranks by shared seeds; alignment decides. 20 is ample &mdash; a query reads ~50&nbsp;KB either way.</span>
+      </label>
+      <label>Index identity floor
+        <input type="number" id="minindexid" value="90" min="0" max="100">
+        <span class="hint">Below this, fall through to BLAST. Seeding is exact-k-mer, so it is reliable above ~90% and fades below ~70%.</span>
+      </label>
+      <label>Database
+        <select id="database">
+          <option value="uniprotkb_swissprot" selected>UniProtKB / SwissProt</option>
+          <option value="uniprotkb">UniProtKB (all)</option>
+          <option value="uniprotkb_trembl">UniProtKB / TrEMBL</option>
+          <option value="uniprotkb_reference_proteomes">Reference proteomes</option>
+        </select>
+        <span class="hint">SwissProt takes ~10&nbsp;s, full UniProtKB 2&ndash;5&nbsp;min. AlphaFold DB stores one MSA per UniRef cluster, so a SwissProt hit usually returns the <em>same file</em> as the closer TrEMBL hit &mdash; the slower search rarely changes the answer.</span>
+      </label>
+      <label>E-value
+        <input type="text" id="evalue" value="1e-3">
+        <span class="hint">Upper bound for a hit to be considered.</span>
+      </label>
+      <label>Hits to merge
+        <input type="number" id="maxhits" value="1" min="1" max="10">
+        <span class="hint">MSAs are per UniRef cluster, so near-identical hits share one file. See below.</span>
+      </label>
+      <label>Hit diversity
+        <input type="number" id="pairid" value="0.9" min="0.1" max="1.01" step="0.05">
+        <span class="hint">Skip a hit more than this identical to one already taken &mdash; before downloading it.</span>
+      </label>
+    </div>
+  </details>
+</section>
+
+<section class="panel">
+  <details>
+    <summary>Filters <span class="muted small">&mdash; applied to the merged alignment</span></summary>
+    <div class="grid">
+      <label>Min coverage
+        <input type="number" id="mincov" value="0" min="0" max="1" step="0.05">
+        <span class="hint">Drop sequences gapped over more than this fraction of columns.</span>
+      </label>
+      <label>Min identity to query
+        <input type="number" id="minid" value="0" min="0" max="1" step="0.05">
+      </label>
+      <label>Max identity (redundancy)
+        <input type="number" id="maxid" value="1" min="0.1" max="1" step="0.05">
+        <span class="hint">1 disables. 0.9 is a common choice; it clusters greedily, keeping the member closest to the query.</span>
+      </label>
+      <label>Max depth
+        <input type="number" id="maxdepth" value="0" min="0">
+        <span class="hint">0 = unlimited.</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="sortid" checked>
+        Sort by identity to query
+      </label>
+    </div>
+  </details>
+</section>
+
+<section class="panel run">
+  <button id="run" class="primary">Build MSA</button>
+  <button id="cancel" class="ghost" hidden>Cancel</button>
+  <span id="status" class="status"></span>
+</section>
+
+<section id="log-panel" class="panel" hidden>
+  <details open>
+    <summary>Log</summary>
+    <pre id="log"></pre>
+  </details>
+</section>
+
+<section id="results" hidden></section>
+
+</main>
+
+<footer>
+  <p>
+    Built on the AlphaFold DB precomputed MSAs used by
+    <a href="https://github.com/sokrypton/py2Dmol" target="_blank" rel="noopener">py2Dmol</a>,
+    with filtering following
+    <a href="https://github.com/sokrypton/GREMLIN-GUI" target="_blank" rel="noopener">GREMLIN-GUI</a>.
+    Please respect the <a href="https://www.ebi.ac.uk/about/terms-of-use" target="_blank" rel="noopener">EBI terms of use</a>.
+  </p>
+</footer>
+
+<script src="seeds.js"></script>
+<script src="align.js"></script>
+<script src="search.js"></script>
+<script src="msa.js"></script>
+<script src="filter.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
