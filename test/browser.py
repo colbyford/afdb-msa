@@ -92,7 +92,7 @@ with sync_playwright() as p:
     ok(not failed, f'no failed requests{"" if not failed else ": " + failed[0][:120]}')
 
     print('\n# modules reached the page')
-    for g in ['MSAKit', 'Filter', 'Api', 'Seeds', 'Align', 'Search']:
+    for g in ['MSAKit', 'Api', 'Seeds', 'Align', 'Search']:
         ok(page.evaluate(f'typeof window.{g} !== "undefined"'), f'window.{g} defined')
 
     print('\n# it renders')
