@@ -78,7 +78,9 @@ vm.createContext(sandbox);
 
 /* ---------- load the page's scripts, in page order ---------- */
 
-const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
+// index.html carries content-hash cache busting (app.js?v=d0262328), so strip
+// the query before touching the filesystem.
+const scripts = [...html.matchAll(/<script src="([^"?]+)(?:\?[^"]*)?"><\/script>/g)].map(m => m[1]);
 console.log(`# loading ${scripts.join(', ')}`);
 let loadError = null;
 try {
@@ -94,6 +96,23 @@ ok(EXPECTED.every(f => scripts.includes(f)),
   `index.html loads every module (missing: ${EXPECTED.filter(f => !scripts.includes(f)).join(', ') || 'none'})`);
 // app.js last: it reads the globals the others publish.
 ok(scripts[scripts.length - 1] === 'app.js', `app.js is loaded last (got ${scripts[scripts.length - 1]})`);
+
+/*
+ * Every asset must carry a content hash matching its bytes. Pages serves
+ * cache-control: max-age=600, so without this a browser can hold a stale
+ * app.js and pair it with a fresh index.html -- which crashed for real when
+ * index.html dropped the filter controls and the cached app.js kept reading
+ * them. Run tools/stamp.mjs after changing any asset.
+ */
+{
+  const { createHash } = await import('node:crypto');
+  const tags = [...html.matchAll(/(?:src|href)="([\w.-]+\.(?:js|css))\?v=([0-9a-f]+)"/g)];
+  const untagged = [...html.matchAll(/(?:src|href)="([\w.-]+\.(?:js|css))"/g)].map(m => m[1]);
+  ok(untagged.length === 0, `every asset is stamped${untagged.length ? ' -- missing: ' + untagged.join(', ') : ''}`);
+  const stale = tags.filter(([, f, v]) =>
+    createHash('sha256').update(readFileSync(join(root, f))).digest('hex').slice(0, 8) !== v).map(m => m[1]);
+  ok(stale.length === 0, `all ${tags.length} hashes match the files${stale.length ? ' -- stale: ' + stale.join(', ') : ''}`);
+}
 
 console.log('\n# globals published');
 for (const g of ['MSAKit', 'Filter', 'Api', 'Seeds', 'Align', 'Search']) ok(!!sandbox[g], `window.${g} is defined`);

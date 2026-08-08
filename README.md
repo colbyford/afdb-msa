@@ -175,7 +175,19 @@ About 5 minutes of sharding on 24 cores and 2.5 minutes to merge.
 ## Deploying
 
 The page goes on GitHub Pages: Settings -> Pages -> deploy from branch, root.
-There is no build step, so no Action is needed -- 68 KB of static files.
+There is no build step -- 68 KB of static files.
+
+One thing to run before committing a change to any `.js` or `.css`:
+
+```sh
+node tools/stamp.mjs
+```
+
+It rewrites the tags in `index.html` to carry a content hash
+(`app.js?v=d0262328`). Pages serves everything with `cache-control: max-age=600`,
+so without it a browser can hold a stale script for ten minutes and pair it with
+a fresh page -- which is worse than either alone, and crashed for real once.
+`test/dom.mjs` fails if a hash is missing or does not match its file.
 
 The index is 17 GB and lives on
 [Hugging Face](https://huggingface.co/datasets/sokrypton/afdb-msa-index), which
