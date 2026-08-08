@@ -116,46 +116,29 @@ with sync_playwright() as p:
     ok('aste a sequence' in page.text_content('#status'), f'empty rejected: "{page.text_content("#status")}"')
     page.fill('#seq', 'MVLSPADK123')
     page.click('#run'); page.wait_for_timeout(400)
-    ok('amino-acid' in page.text_content('#status'), f'bad residues rejected')
+    ok('amino-acid' in page.text_content('#status'), 'bad residues rejected')
 
-    if INDEX:
-        print('\n# exact-match path (no index needed)')
-        page.fill('#indexurl', '')
-        page.fill('#seq', HBA)
-        page.fill('#email', '')
-        t0 = time.time()
-        page.click('#run')
-        page.wait_for_selector('#results button.primary', timeout=180000)
-        ok(True, f'exact match resolved in {time.time()-t0:.1f}s')
-        ok('exact' in (page.text_content('#log') or '').lower(), 'log shows the exact-match path')
-
-        print('\n# a real query through the INDEX (no exact match possible)')
-        page.fill('#indexurl', base + 'idx')
-        page.uncheck('#tryexact')
-        page.fill('#seq', HBA_MUT)
-        page.fill('#email', '')
-        t0 = time.time()
-        page.click('#run')
-        try:
-            page.wait_for_selector('#results button.primary', timeout=180000)
-        except Exception:
-            print('  status:', page.text_content('#status')[:160])
-            print('  log:', (page.text_content('#log') or '')[:600])
-            ok(False, 'a3m produced')
-        else:
-            dt = time.time() - t0
-            label = page.text_content('#results button.primary')
-            stats = page.text_content('#results .stats') or ''
-            ok(True, f'a3m produced in {dt:.1f}s -- button reads "{label}"')
-            ok('MB' in label or 'KB' in label, 'download button shows a real size')
-            n = re.search(r'(\d+)\s*sequences', stats)
-            ok(n and int(n.group(1)) > 100, f'stats: {stats.strip()[:90]}')
-            log = page.text_content('#log') or ''
-            ok('index:' in log.lower(), 'log shows the index path was used')
-            ok('blast' not in log.lower() or 'falling back' not in log.lower(),
-               'did not fall back to BLAST')
-            m = re.search(r'KB read, (\d+) ms', log)
-            if m: print(f'       index lookup: {m.group(0)}')
+    print('\n# a real query -- the only path there is')
+    page.fill('#seq', HBA_MUT)
+    t0 = time.time()
+    page.click('#run')
+    try:
+        page.wait_for_selector('#results button.primary', timeout=240000)
+    except Exception:
+        print('  status:', page.text_content('#status')[:180])
+        print('  log:', (page.text_content('#log') or '')[:500])
+        ok(False, 'a3m produced')
+    else:
+        dt = time.time() - t0
+        label = page.text_content('#results button.primary')
+        stats = page.text_content('#results .stats') or ''
+        log = page.text_content('#log') or ''
+        ok(True, f'a3m in {dt:.1f}s -- "{label}"')
+        n = re.search(r'(\d[\d,]*)\s*sequences', stats)
+        ok(n and int(n.group(1).replace(',', '')) > 1000, f'stats: {stats.strip()[:80]}')
+        m = re.search(r'\d+ candidates from .*', log)
+        if m: print(f'       {m.group(0)[:96]}')
+        ok('blast' not in log.lower(), 'no BLAST anywhere in the log')
 
     ok(not errors, f'still no console errors{"" if not errors else ": " + errors[-1][:140]}')
     page.screenshot(path='/tmp/afdbmsa.png', full_page=True)

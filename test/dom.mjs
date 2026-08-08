@@ -101,11 +101,11 @@ for (const g of ['MSAKit', 'Filter', 'Api', 'Seeds', 'Align', 'Search']) ok(!!sa
 /* ---------- init ---------- */
 
 console.log('\n# DOMContentLoaded');
-store.set('afdbmsa.email', 'saved@example.org');
+
 let initError = null;
 try { document._ready(); } catch (e) { initError = e; }
 ok(!initError, `init runs without throwing${initError ? ` — ${initError.message}` : ''}`);
-ok(byId.get('email').value === 'saved@example.org', 'saved email is restored from localStorage');
+ok(byId.get('seq') !== null, 'sequence box present');
 ok(typeof byId.get('run').onclick === 'function', 'Run button is wired');
 ok(typeof byId.get('cancel').onclick === 'function', 'Cancel button is wired');
 ok(exampleButtons.every(b => typeof b.onclick === 'function'), `all ${exampleButtons.length} example buttons are wired`);
@@ -125,30 +125,25 @@ const run = byId.get('run').onclick;
 await run();
 ok(/paste a sequence/i.test(byId.get('status').textContent), `empty input is rejected — "${byId.get('status').textContent}"`);
 
-byId.get('seq').value = 'MVLSPADKTNVK';
-byId.get('email').value = 'not-an-email';
-await run();
-ok(/email/i.test(byId.get('status').textContent), `bad email is rejected — "${byId.get('status').textContent}"`);
-ok(byId.get('run').disabled === false, 'Run is re-enabled after a rejected submit');
-
 byId.get('seq').value = 'MVLSPADK123';
-byId.get('email').value = 'a@b.co';
 await run();
 ok(/amino-acid/i.test(byId.get('status').textContent), `bad residues are rejected — "${byId.get('status').textContent}"`);
+ok(byId.get('run').disabled === false, 'Run is re-enabled after a rejected submit');
 
-console.log('\n# index path wiring');
-// The index must be optional: with no index URL configured, tryIndex has to bow
-// out immediately rather than throw, so BLAST still runs.
-ok(typeof sandbox.tryIndex === 'function', 'tryIndex exists');
-byId.get('indexurl').value = '';
-ok(await sandbox.tryIndex({ name: 'q', seq: 'MVLSPADK' }, { indexUrl: '' }, null, 't') === null,
-  'no index URL configured -> falls through to BLAST');
-byId.get('indexurl').value = 'data/index';
-// fetch throws in this shim, standing in for a site published without an index.
-ok(await sandbox.tryIndex({ name: 'q', seq: 'MVLSPADK' }, { indexUrl: 'data/index' }, null, 't') === null,
-  'unreachable index -> falls through to BLAST rather than failing the run');
+console.log('\n# the single search path');
+ok(typeof sandbox.processChain === 'function', 'processChain exists');
 ok(sandbox.Search.MinimizerIndex.length >= 1, 'MinimizerIndex takes a base URL');
+const appSrc = readFileSync(join(root, 'app.js'), 'utf8');
+const urlMatch = /INDEX_URL\s*=\s*'([^']+)'/.exec(appSrc);
+ok(urlMatch && urlMatch[1].startsWith('https://huggingface.co'),
+  `index URL is baked in: ${urlMatch ? urlMatch[1].slice(0, 56) + '…' : 'NOT FOUND'}`);
 ok(sandbox.Align.smithWaterman('MVLSPADKTNVK', 'MVLSPADKTNVK').identity === 100, 'aligner is live in the page context');
+// No fallback: an unreachable index must surface as an error, not a silent
+// downgrade to something slower.
+byId.get('seq').value = 'MVLSPADKTNVKAAWGKVGAHAGEY';
+await run();
+ok(/error|fail|network/i.test(byId.get('status').textContent),
+  `unreachable index reports an error rather than falling back — "${byId.get('status').textContent.slice(0, 60)}"`);
 
 console.log('\n# rendering results');
 // Feed renderResults a synthetic two-chain result and check it builds a DOM and
@@ -160,9 +155,10 @@ const mkRes = (name, seq, n) => {
   }
   return {
     chain: { name, seq }, queryLen: seq.length, rows,
-    hits: [{ acc: 'P69905', db: 'SP', identity: 99.3, queryCoverage: 1, evalue: 1e-90, organism: 'Homo sapiens' }],
-    built: { stats: [{ acc: 'P69905', added: n, total: n }] },
-    skipped: [{ acc: 'P69907', dupOf: 'P69905' }],
+    donor: {
+      acc: 'A0A2J8INE6', identity: 98.6, queryCoverage: 1,
+      organism: 'Pan troglodytes', desc: 'Hemoglobin subunit alpha',
+    },
   };
 };
 let renderError = null;

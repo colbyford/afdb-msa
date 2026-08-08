@@ -7,20 +7,21 @@ entry, so this finds the AFDB entry closest to your query and **re-indexes its
 alignment onto your query's residue numbering**. Give it more than one sequence
 and it also emits a species-paired alignment for complex prediction.
 
-No MMseqs2, no HMMER, and BLAST only as a fallback. The page is 68 KB of static
-files; the search is an index served as static byte ranges.
+No MMseqs2, no HMMER, no BLAST, no server. The page is static files; the search
+is an index served as static byte ranges.
 
-## The three paths
+## One path
 
 ```
-query sequence
-   |
-   +- UniParc CRC64 lookup ------------> exact match? ~1.5 s, no search at all
-   |        | no match
-   +- AFDB minimizer index -------------> ~50 KB, ~1 ms, 239.6M entries
-   |        | nothing above the identity floor
-   +- EBI BLAST ------------------------> the fallback
+sequence -> seeds -> index -> candidates -> Smith-Waterman -> best donor
+         -> that donor's AFDB MSA -> re-indexed onto your query
 ```
+
+There is no fallback and nothing to configure. Earlier versions tried a UniParc
+checksum shortcut first and EBI BLAST after; neither earned its complexity. The
+index already returns exact matches at 100% identity, and below its range a
+borrowed alignment is not worth having -- so when nothing close exists, that is
+reported rather than papered over by a slower search that would not do better.
 
 ## How the borrowing works
 
@@ -130,7 +131,7 @@ raw depth because raw depth flatters a redundant alignment.
 | `align.js` | Smith-Waterman / BLOSUM62 -- supplies the alignment BLAST would have |
 | `seeds.js` | minimizer seeding, shared verbatim by builder and browser |
 | `search.js` | client-side lookup over the index via HTTP Range |
-| `api.js` | UniParc CRC64, AFDB MSA fetch, EBI BLAST fallback |
+| `api.js` | AFDB sequence and MSA fetch -- the only remote source |
 | `app.js` | UI wiring only |
 | `tools/afdb-shard.mjs` | one shard of the index: FASTA -> sorted postings |
 | `tools/afdb-merge.mjs` | merge shards into the published layout |
@@ -142,10 +143,10 @@ raw depth because raw depth flatters a redundant alignment.
 ## Tests
 
 ```sh
-node test/test.mjs                       # 100 assertions; caches AFDB fixtures in test/data
-node test/dom.mjs                        # 32; no network
-node test/index-e2e.mjs <indexDir>       # 16; the whole path over real HTTP Range
-EMAIL=you@example.org node test/e2e.mjs  # live BLAST fallback
+node test/test.mjs                  # 86 assertions; caches AFDB fixtures in test/data
+node test/dom.mjs                   # 31; no network
+node test/index-e2e.mjs <indexDir>  # 16; the whole path over real HTTP Range
+python3 test/browser.py             # 22; the page in a real browser
 ```
 
 ## Building the index
