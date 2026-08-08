@@ -62,7 +62,7 @@
       </label>
       <label>Max identity (redundancy)
         <input type="number" id="maxid" value="1" min="0.1" max="1" step="0.05">
-        <span class="hint">1 disables. 0.9 clusters greedily, keeping the member closest to the query.</span>
+        <span class="hint">1 disables it. 0.9 drops any sequence more than 90% identical to one already kept; the survivor is always the one closest to your query.</span>
       </label>
       <label>Max depth
         <input type="number" id="maxdepth" value="0" min="0">
@@ -70,7 +70,8 @@
       </label>
       <label class="check">
         <input type="checkbox" id="sortid" checked>
-        Sort by identity to query
+        Sort output by identity to query
+        <span class="hint">Affects row order only, not which rows survive.</span>
       </label>
     </div>
   </details>

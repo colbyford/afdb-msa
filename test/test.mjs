@@ -212,6 +212,26 @@ console.log('\n# filters');
   const red7 = F.filterRows(built.rows, { maxIdentity: 0.7, sortByIdentity: true });
   ok(red7.rows.length <= red.rows.length, 'stricter redundancy keeps fewer');
 
+  /*
+   * Which rows survive redundancy clustering must not depend on the output
+   * sort. The clustering is greedy and keeps whichever cluster member it meets
+   * first, so it is always run over identity-sorted rows -- otherwise the
+   * survivor is an accident of input order, and the UI's claim that it keeps
+   * "the one closest to your query" would be false whenever sorting was off.
+   * Measured before the fix: 13 of ~500 members differed.
+   */
+  const sorted = F.filterRows(built.rows, { maxIdentity: 0.9, sortByIdentity: true });
+  const unsorted = F.filterRows(built.rows, { maxIdentity: 0.9, sortByIdentity: false });
+  eq(sorted.rows.length, unsorted.rows.length, 'redundancy keeps the same count regardless of output sort');
+  const sa = new Set(sorted.rows.map(r => r.name));
+  const differ = unsorted.rows.filter(r => !sa.has(r.name)).length;
+  eq(differ, 0, 'and exactly the same members');
+  eq(unsorted.rows[0].seq, hbaSeq, 'query stays first when unsorted');
+  // ...while the output order itself does follow the flag
+  const idOf = r => F.identityTo(F.matchStates(r.seq), F.matchStates(hbaSeq));
+  const descending = sorted.rows.slice(1, 30).every((r, i, a) => i === 0 || idOf(a[i - 1]) >= idOf(r));
+  ok(descending, 'sorted output really is descending by identity');
+
   const capped = F.filterRows(built.rows, { maxDepth: 100 });
   eq(capped.rows.length, 100, 'maxDepth caps the output');
 
