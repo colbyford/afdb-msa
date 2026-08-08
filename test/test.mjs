@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const K = require(join(here, '..', 'msa.js'));
-const F = require(join(here, '..', 'filter.js'));
+// filter.js was removed with the filtering; the tests still need to look at
+// match states, which is one line.
+const F = { matchStates: seq => seq.replace(/[a-z]/g, '') };
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => {
@@ -191,56 +193,6 @@ console.log('\n# pairing two chains');
     if (!(leftEmpty || rightEmpty)) { padOk = false; break; }
   }
   ok(padOk, 'each unpaired row occupies exactly one chain block');
-}
-
-/* ---------- 7. filtering ---------- */
-console.log('\n# filters');
-{
-  const built = K.buildChainA3M({ name: 'q', seq: hbaSeq }, [hit('P69905', HBA, hbaSeq.length, identityHsp(hbaSeq))]);
-  const n0 = built.rows.length;
-
-  const cov = F.filterRows(built.rows, { minCoverage: 0.75 });
-  ok(cov.rows.length < n0, `coverage>=0.75 keeps ${cov.rows.length}/${n0}`);
-  eq(cov.rows[0].seq, hbaSeq, 'query survives coverage filter');
-
-  const idn = F.filterRows(built.rows, { minIdentity: 0.3 });
-  ok(idn.rows.length <= n0, `identity>=0.30 keeps ${idn.rows.length}/${n0}`);
-
-  const red = F.filterRows(built.rows, { maxIdentity: 0.9, sortByIdentity: true });
-  ok(red.rows.length < n0, `redundancy<=0.90 keeps ${red.rows.length}/${n0}`);
-
-  const red7 = F.filterRows(built.rows, { maxIdentity: 0.7, sortByIdentity: true });
-  ok(red7.rows.length <= red.rows.length, 'stricter redundancy keeps fewer');
-
-  /*
-   * Which rows survive redundancy clustering must not depend on the output
-   * sort. The clustering is greedy and keeps whichever cluster member it meets
-   * first, so it is always run over identity-sorted rows -- otherwise the
-   * survivor is an accident of input order, and the UI's claim that it keeps
-   * "the one closest to your query" would be false whenever sorting was off.
-   * Measured before the fix: 13 of ~500 members differed.
-   */
-  const sorted = F.filterRows(built.rows, { maxIdentity: 0.9, sortByIdentity: true });
-  const unsorted = F.filterRows(built.rows, { maxIdentity: 0.9, sortByIdentity: false });
-  eq(sorted.rows.length, unsorted.rows.length, 'redundancy keeps the same count regardless of output sort');
-  const sa = new Set(sorted.rows.map(r => r.name));
-  const differ = unsorted.rows.filter(r => !sa.has(r.name)).length;
-  eq(differ, 0, 'and exactly the same members');
-  eq(unsorted.rows[0].seq, hbaSeq, 'query stays first when unsorted');
-  // ...while the output order itself does follow the flag
-  const idOf = r => F.identityTo(F.matchStates(r.seq), F.matchStates(hbaSeq));
-  const descending = sorted.rows.slice(1, 30).every((r, i, a) => i === 0 || idOf(a[i - 1]) >= idOf(r));
-  ok(descending, 'sorted output really is descending by identity');
-
-  const capped = F.filterRows(built.rows, { maxDepth: 100 });
-  eq(capped.rows.length, 100, 'maxDepth caps the output');
-
-  const ne = F.neff(built.rows, 0.8);
-  ok(ne > 0 && ne <= n0, `Neff@0.8 = ${ne} (of ${n0})`);
-
-  // Filtering must not disturb the alignment geometry.
-  const bad = red.rows.filter(r => K.countMatchStates(r.seq) !== hbaSeq.length).length;
-  eq(bad, 0, 'filtering preserves match-state count');
 }
 
 /* ---------- 7b. diverse hit selection ---------- */

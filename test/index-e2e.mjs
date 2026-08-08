@@ -13,12 +13,15 @@
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { openSync, readSync, closeSync, statSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-const require = createRequire('file:///home/ubuntu/msa_afdb/x.js');
-const R = '/home/ubuntu/msa_afdb';
-globalThis.Seeds = require(R + '/seeds.js');
-const A = require(R + '/align.js'), K = require(R + '/msa.js'), F = require(R + '/filter.js'), Api = require(R + '/api.js');
-const { MinimizerIndex } = require(R + '/search.js');
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const require = createRequire(import.meta.url);
+const R = join(dirname(fileURLToPath(import.meta.url)), '..');
+globalThis.Seeds = require(join(R, 'seeds.js'));
+const A = require(join(R, 'align.js'));
+const K = require(join(R, 'msa.js'));
+const Api = require(join(R, 'api.js'));
+const { MinimizerIndex } = require(join(R, 'search.js'));
 const DIR = process.argv[2];
 
 let reqs = 0, served = 0;
@@ -67,13 +70,13 @@ try {
     console.log(`       ${reqs - r0} ranged requests, ${((served - s0) / 1024).toFixed(0)} KB, ${dt} ms`);
     console.log(`       top: ${hits.slice(0, 4).map(h => h.acc + '(' + h.shared + ')').join(' ')}`);
 
-    const seqs = await Api.candidateSequences(hits.map(h => h.acc), null, n => console.log('       ' + n));
-    ok(seqs.size > 0, `resolved ${seqs.size}/${hits.length} candidate sequences`);
+    const info = await Api.candidateInfo(hits.map(h => h.acc));
+    ok(info.size > 0, `resolved ${info.size}/${hits.length} candidate sequences from AlphaFold DB`);
     let best = null;
     for (const h of hits) {
-      const s = seqs.get(h.acc); if (!s) continue;
-      const aln = A.smithWaterman(q, s);
-      if (aln && (!best || aln.score > best.aln.score)) best = { acc: h.acc, aln, len: s.length };
+      const t = info.get(h.acc); if (!t) continue;
+      const aln = A.smithWaterman(q, t.seq);
+      if (aln && (!best || aln.score > best.aln.score)) best = { acc: h.acc, aln, len: t.seq.length };
     }
     ok(!!best, best ? `best ${best.acc} at ${best.aln.identity.toFixed(1)}% identity, ${(best.aln.queryCoverage * 100).toFixed(0)}% coverage` : 'no alignment');
     // Only queries that actually have a >=90% relative can clear the bar. The
@@ -85,12 +88,12 @@ try {
 
     let got = null;
     for (const h of hits.slice(0, 6)) {
-      try { got = { acc: h.acc, text: await Api.afdbFetchMsaCached(h.acc) }; break; }
+      try { got = { acc: h.acc, text: await Api.fetchMsaCached(h.acc) }; break; }
       catch (e) { if (e.name !== 'NoMsaError') throw e; }
     }
     ok(!!got, got ? `AFDB MSA for ${got.acc}: ${(got.text.length / 1e6).toFixed(2)} MB` : 'no MSA');
     if (!got) continue;
-    const dseq = seqs.get(got.acc);
+    const dseq = info.get(got.acc).seq;
     const aln = A.smithWaterman(q, dseq);
     const built = K.buildChainA3M({ name: 'query', seq: q }, [{
       acc: got.acc, a3mText: got.text, hitLen: dseq.length,
@@ -99,11 +102,13 @@ try {
     }]);
     const bad = built.rows.filter(x => K.countMatchStates(x.seq) !== q.length).length;
     ok(bad === 0, `transferred ${built.rows.length} sequences, all with ${q.length} match states`);
-    const filt = F.filterRows(built.rows, { minCoverage: 0.5, maxIdentity: 0.9, sortByIdentity: true });
-    ok(filt.rows.length > 50, `${filt.rows.length} after filtering, Neff@0.8 = ${F.neff(filt.rows, 0.8)}`);
-    const a3m = K.formatA3M(filt.rows);
+    const a3m = K.formatA3M(built.rows);
+    // Insertions are the point of a3m; assert they survive the transfer.
+    const lower = a3m.split('\n').filter(l => l && l[0] !== '>')
+      .reduce((n, l) => n + (l.match(/[a-z]/g) || []).length, 0);
+    ok(lower > 0, `${lower} lowercase insertion characters preserved`);
     ok(a3m.startsWith('>query\n') && a3m.split('\n')[1] === q, 'well-formed a3m, query first');
-    console.log(`       -> ${(a3m.length / 1e6).toFixed(2)} MB a3m, ${filt.rows.length} sequences\n`);
+    console.log(`       -> ${(a3m.length / 1e6).toFixed(2)} MB a3m, ${built.rows.length} sequences\n`);
   }
 } finally { srv.close(); for (const fd of fds.values()) closeSync(fd); }
 console.log(`total: ${reqs} ranged requests, ${(served / 1024).toFixed(0)} KB from a 17 GB index`);

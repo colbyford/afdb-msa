@@ -91,7 +91,7 @@ try {
 ok(!loadError, `all scripts evaluate without throwing${loadError ? ` — ${loadError.message}` : ''}`);
 // Assert the set, not a count -- a count breaks every time a module is added,
 // and says nothing about whether the right ones are there.
-const EXPECTED = ['seeds.js', 'align.js', 'search.js', 'msa.js', 'filter.js', 'api.js', 'app.js'];
+const EXPECTED = ['seeds.js', 'align.js', 'search.js', 'msa.js', 'api.js', 'app.js'];
 ok(EXPECTED.every(f => scripts.includes(f)),
   `index.html loads every module (missing: ${EXPECTED.filter(f => !scripts.includes(f)).join(', ') || 'none'})`);
 // app.js last: it reads the globals the others publish.
@@ -115,7 +115,7 @@ ok(scripts[scripts.length - 1] === 'app.js', `app.js is loaded last (got ${scrip
 }
 
 console.log('\n# globals published');
-for (const g of ['MSAKit', 'Filter', 'Api', 'Seeds', 'Align', 'Search']) ok(!!sandbox[g], `window.${g} is defined`);
+for (const g of ['MSAKit', 'Api', 'Seeds', 'Align', 'Search']) ok(!!sandbox[g], `window.${g} is defined`);
 
 /* ---------- init ---------- */
 

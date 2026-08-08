@@ -114,31 +114,23 @@ MVLSPADKT...(chain A)...KYRMVHLTPE...(chain B)...AHKYH
 
 On haemoglobin alpha/beta that yields ~613 species-paired rows.
 
-## Filters
+## What comes back
 
-The a3m comes back whole, ordered by identity to the query. Coverage, identity
-and redundancy filters live in `filter.js` and are deliberately not exposed:
-they are lossy, the right thresholds depend on what you do with the alignment
-next, and a wrong guess quietly discards sequences. Filter downstream, where the
-requirement is known.
+The a3m is exactly AlphaFold DB's, re-indexed onto your query and otherwise
+untouched: same sequences, same order, insertions intact. No filtering, no
+reordering, no statistics.
 
-Their semantics follow [GREMLIN-GUI](https://github.com/sokrypton/GREMLIN-GUI)'s
-`msa.js`, so numbers are comparable with that tool: coverage is the non-gap
-fraction of a row, identity is over all columns, and redundancy is greedy
-clustering. Neff@0.8 is reported alongside raw depth in the results, because raw
-depth flatters a redundant alignment.
-
-One detail that bit: greedy clustering keeps whichever cluster member it meets
-first, so it is always run over identity-sorted rows -- otherwise the survivor is
-an accident of input order. Measured on a 600-row MSA, the two orders kept 13
-different members out of ~500.
+Sorting by identity was the last thing removed. It put the near-identical rows
+first, and those carry no insertions, so the head of the file looked as though
+the lowercase had been dropped -- it had not, but native order is both truthful
+and less surprising. Anything lossy belongs downstream, where the requirement is
+actually known.
 
 ## Files
 
 | file | role |
 |---|---|
 | `msa.js` | a3m parsing, the hit->query transfer, pairing |
-| `filter.js` | coverage / identity / redundancy filters, Neff |
 | `align.js` | Smith-Waterman / BLOSUM62 -- supplies the alignment BLAST would have |
 | `seeds.js` | minimizer seeding, shared verbatim by builder and browser |
 | `search.js` | client-side lookup over the index via HTTP Range |

@@ -136,6 +136,7 @@ with sync_playwright() as p:
         ok(True, f'a3m in {dt:.1f}s -- "{label}"')
         n = re.search(r'(\d[\d,]*)\s*sequences', stats)
         ok(n and int(n.group(1).replace(',', '')) > 1000, f'stats: {stats.strip()[:80]}')
+        ok('Neff' not in stats, 'no Neff reported')
         m = re.search(r'\d+ candidates from .*', log)
         if m: print(f'       {m.group(0)[:96]}')
         ok('blast' not in log.lower(), 'no BLAST anywhere in the log')

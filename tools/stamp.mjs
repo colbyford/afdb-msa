@@ -23,7 +23,17 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const page = join(root, 'index.html');
 let html = readFileSync(page, 'utf8');
 
-const hash = f => createHash('sha256').update(readFileSync(join(root, f))).digest('hex').slice(0, 8);
+const hash = f => {
+  try {
+    return createHash('sha256').update(readFileSync(join(root, f))).digest('hex').slice(0, 8);
+  } catch (e) {
+    // A tag pointing at a file that no longer exists -- almost always a removed
+    // module whose <script> tag was missed, which the browser would report only
+    // as a 404 and a missing global.
+    console.error(`  index.html references ${f}, which does not exist`);
+    process.exit(1);
+  }
+};
 
 let n = 0;
 html = html.replace(/(src|href)="([\w.-]+\.(?:js|css))(?:\?v=[0-9a-f]+)?"/g, (_, attr, file) => {

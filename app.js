@@ -8,19 +8,16 @@ const INDEX_URL = 'https://huggingface.co/datasets/sokrypton/afdb-msa-index/reso
 const TOP_CANDIDATES = 20;   // ranked by shared seeds; alignment picks the winner
 
 /*
- * The a3m is returned whole, ordered by identity to the query. Coverage,
- * identity and redundancy filters exist in filter.js and are deliberately not
- * exposed: they are lossy, their right values depend on what you do next with
- * the alignment, and a wrong guess quietly discards sequences. Filter
- * downstream, where the requirement is known.
+ * The a3m comes back exactly as AlphaFold DB had it, re-indexed onto the query
+ * and otherwise untouched -- same rows, same order, insertions intact. No
+ * filtering, no reordering, no statistics. Anything lossy belongs downstream
+ * where the requirement is actually known.
+ *
+ * Sorting was the last thing to go: it put the near-identical rows first, and
+ * those carry no insertions, so the head of the file looked as though the
+ * lowercase had been dropped. It had not, but native order is both truthful and
+ * less surprising.
  */
-const FILTERS = {
-  minCoverage: 0,      // keep every row
-  minIdentity: 0,
-  maxIdentity: 1,      // 1 disables redundancy clustering
-  maxDepth: 0,         // unlimited
-  sortByIdentity: true,
-};
 
 const EXAMPLES = {
   hba: '>HBA_HUMAN\nMVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR',
@@ -136,11 +133,9 @@ async function processChain(chain, signal, tag) {
 
   status(`${tag}: transferring the alignment onto your query…`);
   const built = MSAKit.buildChainA3M(chain, [donor]);
-  const filtered = Filter.filterRows(built.rows, FILTERS);
-  for (const w of filtered.warnings) log(`[${tag}]   ${w}`);
-  log(`[${tag}] ${filtered.rows.length} sequences transferred`);
+  log(`[${tag}] ${built.rows.length} sequences transferred`);
 
-  return { chain, donor, rows: filtered.rows, queryLen: chain.seq.length };
+  return { chain, donor, rows: built.rows, queryLen: chain.seq.length };
 }
 
 /* ---------- results ---------- */
@@ -204,10 +199,8 @@ function renderResults(results) {
     t.appendChild(tr);
     p.appendChild(t);
 
-    const neff = Filter.neff(res.rows, 0.8);
     const stats = el('p', 'stats');
-    stats.innerHTML = `<b>${res.rows.length}</b> sequences &middot; <b>${res.queryLen}</b> columns &middot; `
-      + `Neff@0.8 <b>${neff}</b> (${(neff / res.rows.length * 100).toFixed(0)}% effective)`;
+    stats.innerHTML = `<b>${res.rows.length}</b> sequences &middot; <b>${res.queryLen}</b> columns`;
     p.appendChild(stats);
 
     const text = MSAKit.formatA3M(res.rows);
