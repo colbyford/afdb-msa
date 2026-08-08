@@ -7,6 +7,21 @@ const $ = id => document.getElementById(id);
 const INDEX_URL = 'https://huggingface.co/datasets/sokrypton/afdb-msa-index/resolve/main';
 const TOP_CANDIDATES = 20;   // ranked by shared seeds; alignment picks the winner
 
+/*
+ * The a3m is returned whole, ordered by identity to the query. Coverage,
+ * identity and redundancy filters exist in filter.js and are deliberately not
+ * exposed: they are lossy, their right values depend on what you do next with
+ * the alignment, and a wrong guess quietly discards sequences. Filter
+ * downstream, where the requirement is known.
+ */
+const FILTERS = {
+  minCoverage: 0,      // keep every row
+  minIdentity: 0,
+  maxIdentity: 1,      // 1 disables redundancy clustering
+  maxDepth: 0,         // unlimited
+  sortByIdentity: true,
+};
+
 const EXAMPLES = {
   hba: '>HBA_HUMAN\nMVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR',
   hbab: '>HBA_HUMAN\nMVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR\n>HBB_HUMAN\nMVHLTPEEKSAVTALWGKVNVDEVGGEALGRLLVVYPWTQRFFESFGDLSTPDAVMGNPKVKAHGKKVLGAFSDGLAHLDNLKGTFATLSELHCDKLHVDPENFRLLGNVLVCVLAHHFGKEFTPPVQAAYQKVVAGVANALAHKYH',
@@ -61,7 +76,7 @@ let sharedIndex = null;
  * and neither earned its complexity: the index already returns exact matches at
  * 100%, and below its range a borrowed alignment is not worth having.
  */
-async function processChain(chain, cfg, signal, tag) {
+async function processChain(chain, signal, tag) {
   log(`\n[${tag}] ${chain.name}: ${chain.seq.length} aa`);
 
   if (!sharedIndex) sharedIndex = new Search.MinimizerIndex(INDEX_URL);
@@ -121,12 +136,9 @@ async function processChain(chain, cfg, signal, tag) {
 
   status(`${tag}: transferring the alignment onto your query…`);
   const built = MSAKit.buildChainA3M(chain, [donor]);
-  const filtered = Filter.filterRows(built.rows, {
-    minCoverage: cfg.minCov, minIdentity: cfg.minId, maxIdentity: cfg.maxId,
-    maxDepth: cfg.maxDepth, sortByIdentity: cfg.sortById,
-  });
+  const filtered = Filter.filterRows(built.rows, FILTERS);
   for (const w of filtered.warnings) log(`[${tag}]   ${w}`);
-  log(`[${tag}] ${built.rows.length} sequences transferred, ${filtered.rows.length} after filters`);
+  log(`[${tag}] ${filtered.rows.length} sequences transferred`);
 
   return { chain, donor, rows: filtered.rows, queryLen: chain.seq.length };
 }
@@ -231,20 +243,6 @@ function renderResults(results) {
 
 let controller = null;
 
-function readConfig() {
-  const num = (id, dflt) => {
-    const v = parseFloat($(id).value);
-    return Number.isFinite(v) ? v : dflt;
-  };
-  return {
-    minCov: num('mincov', 0),
-    minId: num('minid', 0),
-    maxId: num('maxid', 1),
-    maxDepth: Math.max(0, num('maxdepth', 0)),
-    sortById: $('sortid').checked,
-  };
-}
-
 async function run() {
   logLines = [];
   $('log').textContent = '';
@@ -260,7 +258,6 @@ async function run() {
   }
   if (!chains.length) { status('Paste a sequence first.', 'err'); return; }
 
-  const cfg = readConfig();
   controller = new AbortController();
   $('run').disabled = true;
   $('cancel').hidden = false;
@@ -268,7 +265,7 @@ async function run() {
   try {
     const t0 = Date.now();
     const results = await Promise.all(chains.map((c, i) =>
-      processChain(c, cfg, controller.signal, `chain ${i + 1}`)));
+      processChain(c, controller.signal, `chain ${i + 1}`)));
     renderResults(results);
     status(`Done in ${((Date.now() - t0) / 1000).toFixed(1)}s — ${results.map(r => r.rows.length).join(' + ')} sequences.`, 'ok');
     log('\nDone.');

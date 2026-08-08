@@ -116,11 +116,22 @@ On haemoglobin alpha/beta that yields ~613 species-paired rows.
 
 ## Filters
 
-Thresholds follow [GREMLIN-GUI](https://github.com/sokrypton/GREMLIN-GUI)'s
+The a3m comes back whole, ordered by identity to the query. Coverage, identity
+and redundancy filters live in `filter.js` and are deliberately not exposed:
+they are lossy, the right thresholds depend on what you do with the alignment
+next, and a wrong guess quietly discards sequences. Filter downstream, where the
+requirement is known.
+
+Their semantics follow [GREMLIN-GUI](https://github.com/sokrypton/GREMLIN-GUI)'s
 `msa.js`, so numbers are comparable with that tool: coverage is the non-gap
-fraction of a row, identity is over all columns, redundancy is greedy clustering
-that keeps the member closest to the query, and Neff@0.8 is reported alongside
-raw depth because raw depth flatters a redundant alignment.
+fraction of a row, identity is over all columns, and redundancy is greedy
+clustering. Neff@0.8 is reported alongside raw depth in the results, because raw
+depth flatters a redundant alignment.
+
+One detail that bit: greedy clustering keeps whichever cluster member it meets
+first, so it is always run over identity-sorted rows -- otherwise the survivor is
+an accident of input order. Measured on a 600-row MSA, the two orders kept 13
+different members out of ~500.
 
 ## Files
 

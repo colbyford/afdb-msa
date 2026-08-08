@@ -132,6 +132,10 @@ ok(byId.get('run').disabled === false, 'Run is re-enabled after a rejected submi
 
 console.log('\n# the single search path');
 ok(typeof sandbox.processChain === 'function', 'processChain exists');
+// byId is a Map built from index.html's id attributes, so a removed control is
+// `undefined`, not null.
+ok(!byId.has('mincov') && !byId.has('maxid') && !byId.has('sortid'),
+  'filter controls are not exposed in the page');
 ok(sandbox.Search.MinimizerIndex.length >= 1, 'MinimizerIndex takes a base URL');
 const appSrc = readFileSync(join(root, 'app.js'), 'utf8');
 const urlMatch = /INDEX_URL\s*=\s*'([^']+)'/.exec(appSrc);
