@@ -196,7 +196,7 @@ If you want a GitHub Pages-only deployment, use the static route:
 
 `/api/?seq=<sequence>`
 
-This route lives in `api/index.html` and runs the same client-side pipeline in
+This route lives in `api/index.html` (script: `api/route.js`) and runs the same client-side pipeline in
 the browser, then prints only the final payload in the page body:
 
 - single chain: plain a3m text

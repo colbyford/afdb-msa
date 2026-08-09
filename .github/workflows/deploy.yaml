@@ -32,7 +32,7 @@ jobs:
         run: node --check server.mjs
 
       - name: Check static API route syntax
-        run: node --check api/route.mjs
+        run: node --check api/route.js
 
       - name: Run browserless DOM smoke test
         run: node test/dom.mjs
