@@ -1,0 +1,71 @@
+name: Deploy Web UI + Validate API
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check API server syntax
+        run: node --check server.mjs
+
+      - name: Run browserless DOM smoke test
+        run: node test/dom.mjs
+
+      - name: Start API and smoke test endpoint
+        run: |
+          node server.mjs --port 8080 > server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 2
+          curl -fsS http://127.0.0.1:8080/ > /dev/null
+          curl -fsS 'http://127.0.0.1:8080/api/msa?seq=' | grep -F 'Missing sequence' > /dev/null
+
+  deploy-pages:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        run: |
+          mkdir -p _site
+          cp index.html style.css app.js api.js align.js msa.js search.js seeds.js _site/
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

@@ -231,8 +231,12 @@ About 5 minutes of sharding on 24 cores and 2.5 minutes to merge.
 
 ## Deploying
 
-The page goes on GitHub Pages: Settings -> Pages -> deploy from branch, root.
-There is no build step -- 68 KB of static files.
+The web UI is deployed to GitHub Pages by the workflow
+`.github/workflows/nodejs.yaml` on pushes to `main`.
+
+The API (`server.mjs`) is a Node process and is **not** executed by GitHub
+Pages. The workflow still starts it in CI and smoke-tests `/` and `/api/msa`,
+so web and API behavior are both validated on every push/PR.
 
 One thing to run before committing a change to any `.js` or `.css`:
 
