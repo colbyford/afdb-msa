@@ -35,13 +35,7 @@ jobs:
         run: node test/dom.mjs
 
       - name: Start API and smoke test endpoint
-        run: |
-          node server.mjs --port 8080 > server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID || true' EXIT
-          sleep 2
-          curl -fsS http://127.0.0.1:8080/ > /dev/null
-          curl -fsS 'http://127.0.0.1:8080/api/msa?seq=' | grep -F 'Missing sequence' > /dev/null
+        run: node test/server-smoke.mjs
 
   deploy-pages:
     if: github.event_name != 'pull_request'
@@ -68,4 +62,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
