@@ -138,6 +138,175 @@ async function processChain(chain, signal, tag) {
   return { chain, donor, rows: built.rows, queryLen: chain.seq.length };
 }
 
+/* ---------- browser API (for service worker) ---------- */
+
+async function processChainForApi(chain, signal) {
+  if (!sharedIndex) sharedIndex = new Search.MinimizerIndex(INDEX_URL);
+  await sharedIndex.load();
+
+  const cands = await sharedIndex.search(chain.seq, { topK: TOP_CANDIDATES, signal });
+  if (!cands.length) {
+    throw new Error(
+      `Nothing in AlphaFold DB resembles ${chain.name}. `
+      + 'A sequence with no natural homologs has no alignment to borrow.'
+    );
+  }
+
+  const info = await Api.candidateInfo(cands.map(c => c.acc), signal);
+
+  const scored = [];
+  for (const c of cands) {
+    const t = info.get(c.acc);
+    if (!t) continue;
+    const aln = Align.smithWaterman(chain.seq, t.seq);
+    if (!aln) continue;
+    scored.push({
+      acc: c.acc,
+      identity: Number(aln.identity.toFixed(1)),
+      queryCoverage: aln.queryCoverage,
+      score: aln.score,
+      desc: t.desc,
+      organism: t.organism,
+      taxid: t.taxid,
+      hsp: { qseq: aln.qseq, hseq: aln.hseq, qFrom: aln.qFrom, hFrom: aln.hFrom },
+    });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  if (!scored.length) {
+    throw new Error(`Could not retrieve sequences for any candidate of ${chain.name}.`);
+  }
+
+  let donor = null;
+  for (const h of scored) {
+    try {
+      h.a3mText = await Api.fetchMsaCached(h.acc, null, signal);
+      donor = h;
+      break;
+    } catch (e) {
+      if (e.name !== 'NoMsaError') throw e;
+    }
+  }
+  if (!donor) {
+    throw new Error(`None of the candidates for ${chain.name} has an AlphaFold DB MSA.`);
+  }
+
+  const built = MSAKit.buildChainA3M(chain, [donor]);
+  return { chain, donor, rows: built.rows, queryLen: chain.seq.length };
+}
+
+function apiJson(status, payload) {
+  return {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-headers': 'content-type',
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
+function apiText(status, body, filename) {
+  const headers = {
+    'content-type': 'text/plain; charset=utf-8',
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-headers': 'content-type',
+  };
+  if (filename) headers['content-disposition'] = `attachment; filename="${filename}"`;
+  return { status, headers, body };
+}
+
+async function handleBrowserApiRequest(req) {
+  if (req.method === 'OPTIONS') return apiText(204, '');
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return apiJson(405, { error: 'Method not allowed. Use GET or POST.' });
+  }
+
+  const url = new URL(req.url);
+  let seqText = (url.searchParams.get('seq') || '').trim();
+  const format = url.searchParams.get('format') || '';
+
+  if (req.method === 'POST' && !seqText) {
+    seqText = (req.body || '').trim();
+  }
+
+  if (!seqText) {
+    return apiJson(400, { error: 'Missing sequence. Provide ?seq= or POST the sequence in the request body.' });
+  }
+
+  let chains;
+  try {
+    chains = MSAKit.parseQueryInput(seqText);
+  } catch (e) {
+    return apiJson(400, { error: e.message });
+  }
+  if (!chains.length) return apiJson(400, { error: 'No valid sequences found in input.' });
+
+  const ac = new AbortController();
+  let results;
+  try {
+    results = await Promise.all(chains.map(c => processChainForApi(c, ac.signal)));
+  } catch (e) {
+    if (e.name === 'AbortError') return apiJson(499, { error: 'Request cancelled.' });
+    return apiJson(502, { error: e.message });
+  }
+
+  const wantsAll = format === 'all';
+  const wantsPaired = format === 'paired';
+  const wantsJson = wantsAll || (!format && chains.length > 1);
+
+  if (wantsJson) {
+    const out = {};
+    for (const r of results) out[r.chain.name] = MSAKit.formatA3M(r.rows);
+    if (results.length > 1) {
+      const chainData = results.map(r => ({ queryLen: r.queryLen, rows: r.rows }));
+      const paired = MSAKit.pairChains(chainData);
+      out['Paired Alignment'] = MSAKit.formatPairedA3M(paired);
+    }
+    return apiJson(200, out);
+  }
+
+  if (wantsPaired && results.length > 1) {
+    const chainData = results.map(r => ({ queryLen: r.queryLen, rows: r.rows }));
+    const paired = MSAKit.pairChains(chainData);
+    return apiText(200, MSAKit.formatPairedA3M(paired), 'paired.a3m');
+  }
+
+  const r = results[0];
+  const text = MSAKit.formatA3M(r.rows);
+  const filename = `${r.chain.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}.a3m`;
+  return apiText(200, text, filename);
+}
+
+async function registerBrowserApiServiceWorker() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('sw.js', { scope: './' });
+  } catch (e) {
+    console.warn('Service worker registration failed:', e);
+  }
+}
+
+function installBrowserApiBridge() {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
+  navigator.serviceWorker.addEventListener('message', async ev => {
+    const msg = ev.data || {};
+    if (msg.type !== 'afdb-api-request' || !ev.ports || !ev.ports[0]) return;
+
+    try {
+      const out = await handleBrowserApiRequest(msg.request);
+      ev.ports[0].postMessage({ ok: true, response: out });
+    } catch (e) {
+      ev.ports[0].postMessage({
+        ok: true,
+        response: apiJson(500, { error: e && e.message ? e.message : 'Internal error.' }),
+      });
+    }
+  });
+}
+
 /* ---------- results ---------- */
 
 function download(name, text) {
@@ -278,6 +447,8 @@ async function run() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  installBrowserApiBridge();
+  registerBrowserApiServiceWorker();
   $('run').onclick = run;
   $('cancel').onclick = () => { if (controller) controller.abort(); };
   $('seq').addEventListener('input', refreshSummary);

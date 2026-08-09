@@ -130,6 +130,9 @@ actually known.
 
 The same pipeline is available as a self-hosted HTTP API via `server.mjs`.
 
+On GitHub Pages, `/api/msa` is also available through a browser-only Service
+Worker shim (`sw.js`) that forwards API requests to the open page.
+
 ```sh
 node server.mjs [--port 8080]
 # or: PORT=3000 node server.mjs
@@ -190,6 +193,14 @@ curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
 
 Errors are returned as `{"error":"message"}` with an appropriate HTTP status code.
 
+Browser-only API notes (GitHub Pages):
+
+- Works for `fetch('/api/msa?...')` from pages under the same site scope.
+- Requires at least one open AFDB MSA page tab so the Service Worker can hand
+  the request to in-page logic.
+- Is not a standalone backend endpoint for external clients (for example,
+  `curl` from another machine).
+
 ## Files
 
 | file | role |
@@ -235,8 +246,8 @@ The web UI is deployed to GitHub Pages by the workflow
 `.github/workflows/nodejs.yaml` on pushes to `main`.
 
 The API (`server.mjs`) is a Node process and is **not** executed by GitHub
-Pages. The workflow still starts it in CI and smoke-tests `/` and `/api/msa`,
-so web and API behavior are both validated on every push/PR.
+Pages. The site exposes a browser-only `/api/msa` shim via `sw.js`; the
+workflow still starts `server.mjs` in CI and smoke-tests `/` and `/api/msa`.
 
 One thing to run before committing a change to any `.js` or `.css`:
 
