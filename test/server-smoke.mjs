@@ -20,6 +20,7 @@ const eq = (a, b, m) => ok(a === b, `${m} (got ${JSON.stringify(a)}, want ${JSON
 
 async function waitForServer(url) {
   for (let i = 0; i < 20; i++) {
+    if (server.exitCode !== null) throw new Error(`server exited early:\n${logs.trim()}`);
     try {
       const res = await fetch(url);
       await res.arrayBuffer();
@@ -34,6 +35,7 @@ const server = spawn(process.execPath, ['server.mjs', '--port', String(PORT)], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+const exited = new Promise(resolve => server.once('exit', resolve));
 
 let logs = '';
 server.stdout.on('data', chunk => { logs += chunk.toString('utf8'); });
@@ -59,8 +61,8 @@ try {
       'empty seq returns the documented error message');
   }
 } finally {
-  server.kill('SIGTERM');
-  await new Promise(resolve => server.once('exit', resolve));
+  if (server.exitCode === null) server.kill('SIGTERM');
+  await exited;
 }
 
 if (logs.trim()) console.log(`\n# server log\n${logs.trim()}`);
