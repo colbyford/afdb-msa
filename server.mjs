@@ -8,7 +8,7 @@
  *   node server.mjs [--port 8080]
  *
  * API:
- *   GET /api/msa?seq=<sequence>
+ *   GET /api?seq=<sequence>
  *
  *   <sequence> may be:
  *     - A bare amino-acid sequence:       MVLSPADKTNVK...
@@ -316,7 +316,7 @@ async function handleMsa(req, res) {
 async function handler(req, res) {
   const path = new URL(req.url, 'http://localhost').pathname;
 
-  if ((req.method === 'GET' || req.method === 'POST') && path === '/api/msa') {
+  if ((req.method === 'GET' || req.method === 'POST') && (path === '/api' || path === '/api/msa')) {
     return handleMsa(req, res);
   }
 
@@ -324,8 +324,8 @@ async function handler(req, res) {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end(
       'AFDB MSA API\n\n' +
-      'GET  /api/msa?seq=<sequence>\n' +
-      'POST /api/msa  (body = sequence, Content-Type: text/plain)\n\n' +
+      'GET  /api?seq=<sequence>\n' +
+      'POST /api  (body = sequence, Content-Type: text/plain)\n\n' +
       '<sequence> formats:\n' +
       '  - Bare amino acids:         MVLSPADKTNVK...\n' +
       '  - Colon-separated chains:   MVLSPA...:MVHLT...\n' +
@@ -340,7 +340,7 @@ async function handler(req, res) {
   }
 
   res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found. Try GET /api/msa?seq=<sequence>' }));
+  res.end(JSON.stringify({ error: 'Not found. Try GET /api?seq=<sequence>' }));
 }
 
 /* ---------- main ---------- */
@@ -361,6 +361,6 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`AFDB MSA API listening on http://localhost:${PORT}`);
-  console.log(`  GET  http://localhost:${PORT}/api/msa?seq=MVLSPADKTNVKAA...`);
-  console.log(`  POST http://localhost:${PORT}/api/msa  (body = sequence)`);
+  console.log(`  GET  http://localhost:${PORT}/api?seq=MVLSPADKTNVKAA...`);
+  console.log(`  POST http://localhost:${PORT}/api  (body = sequence)`);
 });

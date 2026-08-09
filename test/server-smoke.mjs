@@ -54,7 +54,7 @@ try {
 
   console.log('\n# missing sequence validation');
   {
-    const res = await fetch(`${BASE}/api/msa?seq=`);
+    const res = await fetch(`${BASE}/api?seq=`);
     const body = await res.json();
     eq(res.status, 400, 'empty seq returns 400');
     eq(body.error, 'Missing sequence. Provide ?seq= or POST the sequence in the request body.',

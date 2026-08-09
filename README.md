@@ -135,8 +135,8 @@ node server.mjs [--port 8080]
 # or: PORT=3000 node server.mjs
 ```
 
-**Endpoint:** `GET /api/msa?seq=<sequence>`  
-Also accepts `POST /api/msa` with the sequence as the plain-text request body.
+**Endpoint:** `GET /api?seq=<sequence>`  
+Also accepts `POST /api` with the sequence as the plain-text request body.
 
 `<sequence>` may be:
 
@@ -170,55 +170,25 @@ the object keys are the input chain names plus `Paired Alignment`:
 
 ```sh
 # single chain -> chain.a3m
-curl 'http://localhost:8080/api/msa?seq=MVLSPADKTNVKAA...' -o hba.a3m
+curl 'http://localhost:8080/api?seq=MVLSPADKTNVKAA...' -o hba.a3m
 
 # two chains -> JSON with one a3m per chain + paired
-curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...'
+curl 'http://localhost:8080/api?seq=MVLSPA...:MVHLT...'
 
 # two chains -> paired.a3m only
-curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=paired' -o paired.a3m
+curl 'http://localhost:8080/api?seq=MVLSPA...:MVHLT...&format=paired' -o paired.a3m
 
 # POST with a FASTA body
-curl -X POST http://localhost:8080/api/msa \
+curl -X POST http://localhost:8080/api \
      -H 'Content-Type: text/plain' \
      --data '>HBA_HUMAN
 MVLSPADKTNVKAA...' -o hba.a3m
 
 # JSON with all outputs (same shape as default multi-chain)
-curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
+curl 'http://localhost:8080/api?seq=MVLSPA...:MVHLT...&format=all'
 ```
 
 Errors are returned as `{"error":"message"}` with an appropriate HTTP status code.
-
-## GitHub Pages static API route (no Node)
-
-If you want a GitHub Pages-only deployment, use the static route:
-
-`/api/?seq=<sequence>`
-
-This route lives in `api/index.html` (script: `api/route.js`) and runs the same client-side pipeline in
-the browser, then prints only the final payload in the page body:
-
-- single chain: plain a3m text
-- multi-chain (default): JSON with one a3m per chain plus `Paired Alignment`
-- `format=paired`: paired a3m text
-- `format=all` or `format=json`: JSON payload
-
-Example:
-
-```text
-https://colbyford.com/afdb-msa/api/?seq=AMQIFVKTLTGKTIT
-```
-
-Important limitations of a static endpoint:
-
-- response headers are still `text/html` (not `application/json` or `text/plain`)
-- HTTP status codes are always page-level (errors are JSON in-body, not 4xx)
-- this still depends on browser network access to Hugging Face and AlphaFold DB
-
-If you need true API headers/status codes for programmatic clients, keep using
-`server.mjs` (or move that logic to a serverless runtime like Cloudflare
-Workers/Netlify Functions).
 
 ## Files
 
@@ -265,7 +235,7 @@ The web UI is deployed to GitHub Pages by the workflow
 `.github/workflows/nodejs.yaml` on pushes to `main`.
 
 The API (`server.mjs`) is a Node process and is **not** executed by GitHub
-Pages. The workflow still starts it in CI and smoke-tests `/` and `/api/msa`,
+Pages. The workflow still starts it in CI and smoke-tests `/` and `/api`,
 so web and API behavior are both validated on every push/PR.
 
 One thing to run before committing a change to any `.js` or `.css`:
