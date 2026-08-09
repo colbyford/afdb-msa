@@ -126,10 +126,75 @@ the lowercase had been dropped -- it had not, but native order is both truthful
 and less surprising. Anything lossy belongs downstream, where the requirement is
 actually known.
 
+## API server
+
+The same pipeline is available as a self-hosted HTTP API via `server.mjs`.
+
+```sh
+node server.mjs [--port 8080]
+# or: PORT=3000 node server.mjs
+```
+
+**Endpoint:** `GET /api/msa?seq=<sequence>`  
+Also accepts `POST /api/msa` with the sequence as the plain-text request body.
+
+`<sequence>` may be:
+
+| Format | Example |
+|---|---|
+| Bare amino acids | `MVLSPADKTNVK...` |
+| Colon-separated chains | `MVLSPA...:MVHLT...` |
+| FASTA (URL-encoded) | `%3EHBA_HUMAN%0AMVLSPA...` |
+
+Optional `format` parameter:
+
+| Value | Behaviour |
+|---|---|
+| *(omitted)* | single chain: plain-text a3m; multiple chains: JSON with one a3m per chain + paired |
+| `single` | always return the first chain's a3m |
+| `paired` | return only the species-paired a3m (requires ≥2 chains) |
+| `all` | return JSON with each chain's a3m plus the paired a3m |
+
+For multi-chain JSON responses (`format` omitted with >1 chain, or `format=all`),
+the object keys are the input chain names plus `Paired Alignment`:
+
+```json
+{
+  "SEQ_1": "<A3M Alignment>",
+  "SEQ_2": "<A3M Alignment>",
+  "Paired Alignment": "<A3M Alignment>"
+}
+```
+
+**Examples:**
+
+```sh
+# single chain -> chain.a3m
+curl 'http://localhost:8080/api/msa?seq=MVLSPADKTNVKAA...' -o hba.a3m
+
+# two chains -> JSON with one a3m per chain + paired
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...'
+
+# two chains -> paired.a3m only
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=paired' -o paired.a3m
+
+# POST with a FASTA body
+curl -X POST http://localhost:8080/api/msa \
+     -H 'Content-Type: text/plain' \
+     --data '>HBA_HUMAN
+MVLSPADKTNVKAA...' -o hba.a3m
+
+# JSON with all outputs (same shape as default multi-chain)
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
+```
+
+Errors are returned as `{"error":"message"}` with an appropriate HTTP status code.
+
 ## Files
 
 | file | role |
 |---|---|
+| `server.mjs` | HTTP API server (`node server.mjs`) |
 | `msa.js` | a3m parsing, the hit->query transfer, pairing |
 | `align.js` | Smith-Waterman / BLOSUM62 -- supplies the alignment BLAST would have |
 | `seeds.js` | minimizer seeding, shared verbatim by builder and browser |
