@@ -150,10 +150,21 @@ Optional `format` parameter:
 
 | Value | Behaviour |
 |---|---|
-| *(omitted)* | a3m for a single chain; paired a3m for multiple chains |
+| *(omitted)* | single chain: plain-text a3m; multiple chains: JSON with one a3m per chain + paired |
 | `single` | always return the first chain's a3m |
-| `paired` | always return the species-paired a3m (requires ≥2 chains) |
+| `paired` | return only the species-paired a3m (requires ≥2 chains) |
 | `all` | return JSON with each chain's a3m plus the paired a3m |
+
+For multi-chain JSON responses (`format` omitted with >1 chain, or `format=all`),
+the object keys are the input chain names plus `Paired Alignment`:
+
+```json
+{
+  "SEQ_1": "<A3M Alignment>",
+  "SEQ_2": "<A3M Alignment>",
+  "Paired Alignment": "<A3M Alignment>"
+}
+```
 
 **Examples:**
 
@@ -161,8 +172,11 @@ Optional `format` parameter:
 # single chain -> chain.a3m
 curl 'http://localhost:8080/api/msa?seq=MVLSPADKTNVKAA...' -o hba.a3m
 
-# two chains -> paired.a3m
-curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...' -o paired.a3m
+# two chains -> JSON with one a3m per chain + paired
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...'
+
+# two chains -> paired.a3m only
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=paired' -o paired.a3m
 
 # POST with a FASTA body
 curl -X POST http://localhost:8080/api/msa \
@@ -170,7 +184,7 @@ curl -X POST http://localhost:8080/api/msa \
      --data '>HBA_HUMAN
 MVLSPADKTNVKAA...' -o hba.a3m
 
-# JSON with all outputs
+# JSON with all outputs (same shape as default multi-chain)
 curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
 ```
 

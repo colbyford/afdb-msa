@@ -33,6 +33,110 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+
+function abortError() {
+  const e = new Error('The operation was aborted.');
+  e.name = 'AbortError';
+  return e;
+}
+
+function normalizeHeaders(headers = {}) {
+  if (!headers) return {};
+  if (typeof headers.entries === 'function') return Object.fromEntries(headers.entries());
+  return { ...headers };
+}
+
+function makeCompatResponse(status, headersObj, data) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get(name) {
+        const v = headersObj[String(name).toLowerCase()];
+        if (Array.isArray(v)) return v.join(', ');
+        return v == null ? null : String(v);
+      },
+    },
+    body: null,
+    async text() { return data.toString('utf8'); },
+    async arrayBuffer() {
+      const view = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      return view;
+    },
+    async json() { return JSON.parse(data.toString('utf8')); },
+  };
+}
+
+function fetchCompatNode(url, options = {}, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const reqFn = u.protocol === 'https:' ? httpsRequest : httpRequest;
+    const method = options.method || 'GET';
+    const headers = normalizeHeaders(options.headers);
+    const signal = options.signal;
+
+    if (signal && signal.aborted) {
+      reject(abortError());
+      return;
+    }
+
+    const req = reqFn(
+      u,
+      { method, headers },
+      res => {
+        const status = res.statusCode || 0;
+        const location = res.headers.location;
+        if (location && [301, 302, 303, 307, 308].includes(status) && redirects < 5) {
+          res.resume();
+          const nextUrl = new URL(location, u).toString();
+          const nextOptions = { ...options };
+          if (status === 303) {
+            nextOptions.method = 'GET';
+            delete nextOptions.body;
+          }
+          resolve(fetchCompatNode(nextUrl, nextOptions, redirects + 1));
+          return;
+        }
+
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          resolve(makeCompatResponse(status, res.headers, Buffer.concat(chunks)));
+        });
+      }
+    );
+
+    req.on('error', reject);
+
+    if (signal) {
+      const onAbort = () => req.destroy(abortError());
+      signal.addEventListener('abort', onAbort, { once: true });
+      req.on('close', () => signal.removeEventListener('abort', onAbort));
+    }
+
+    if (options.body != null) req.write(options.body);
+    req.end();
+  });
+}
+
+async function ensureFetch() {
+  if (typeof globalThis.fetch === 'function') return;
+
+  try {
+    const undici = await import('undici');
+    for (const k of ['fetch', 'Headers', 'Request', 'Response', 'FormData', 'File', 'Blob']) {
+      if (typeof globalThis[k] === 'undefined' && undici[k]) {
+        globalThis[k] = undici[k];
+      }
+    }
+  } catch {
+    globalThis.fetch = fetchCompatNode;
+  }
+}
+
+await ensureFetch();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -169,31 +273,19 @@ async function handleMsa(req, res) {
   }
 
   const wantsAll = format === 'all';
-  const wantsPaired = format === 'paired' || (!format && chains.length > 1);
+  const wantsPaired = format === 'paired';
+  const wantsJson = wantsAll || (!format && chains.length > 1);
 
-  if (wantsAll) {
-    // Return JSON containing each chain's a3m and (when multi-chain) the paired a3m
+  if (wantsJson) {
+    // Return JSON containing each chain's a3m and, when multi-chain, the paired a3m.
     const out = {};
     for (const r of results) {
-      out[r.chain.name] = {
-        donor: {
-          acc: r.donor.acc,
-          identity: r.donor.identity,
-          queryCoverage: r.donor.queryCoverage,
-          organism: r.donor.organism,
-          desc: r.donor.desc,
-        },
-        rows: r.rows.length,
-        a3m: MSAKit.formatA3M(r.rows),
-      };
+      out[r.chain.name] = MSAKit.formatA3M(r.rows);
     }
     if (results.length > 1) {
       const chainData = results.map(r => ({ queryLen: r.queryLen, rows: r.rows }));
       const paired = MSAKit.pairChains(chainData);
-      out['paired'] = {
-        nPaired: paired.nPaired,
-        a3m: MSAKit.formatPairedA3M(paired),
-      };
+      out['Paired Alignment'] = MSAKit.formatPairedA3M(paired);
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(out));
@@ -240,8 +332,9 @@ async function handler(req, res) {
       '  - FASTA:                    >Name\\nMVLSPA...\\n>Name2\\nMVHLT...\n\n' +
       'Optional query params:\n' +
       '  format=single   return the first chain\'s a3m (default for 1 chain)\n' +
-      '  format=paired   return a species-paired a3m  (default for >1 chain)\n' +
-      '  format=all      return JSON with every chain\'s a3m + paired\n'
+      '  format=paired   return only the species-paired a3m\n' +
+      '  format=all      return JSON with every chain\'s a3m + paired\n' +
+      '  default (>1 chain) returns JSON with one a3m per chain + paired\n'
     );
     return;
   }
