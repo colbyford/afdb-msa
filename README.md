@@ -126,10 +126,61 @@ the lowercase had been dropped -- it had not, but native order is both truthful
 and less surprising. Anything lossy belongs downstream, where the requirement is
 actually known.
 
+## API server
+
+The same pipeline is available as a self-hosted HTTP API via `server.mjs`.
+
+```sh
+node server.mjs [--port 8080]
+# or: PORT=3000 node server.mjs
+```
+
+**Endpoint:** `GET /api/msa?seq=<sequence>`  
+Also accepts `POST /api/msa` with the sequence as the plain-text request body.
+
+`<sequence>` may be:
+
+| Format | Example |
+|---|---|
+| Bare amino acids | `MVLSPADKTNVK...` |
+| Colon-separated chains | `MVLSPA...:MVHLT...` |
+| FASTA (URL-encoded) | `%3EHBA_HUMAN%0AMVLSPA...` |
+
+Optional `format` parameter:
+
+| Value | Behaviour |
+|---|---|
+| *(omitted)* | a3m for a single chain; paired a3m for multiple chains |
+| `single` | always return the first chain's a3m |
+| `paired` | always return the species-paired a3m (requires ≥2 chains) |
+| `all` | return JSON with each chain's a3m plus the paired a3m |
+
+**Examples:**
+
+```sh
+# single chain -> chain.a3m
+curl 'http://localhost:8080/api/msa?seq=MVLSPADKTNVKAA...' -o hba.a3m
+
+# two chains -> paired.a3m
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...' -o paired.a3m
+
+# POST with a FASTA body
+curl -X POST http://localhost:8080/api/msa \
+     -H 'Content-Type: text/plain' \
+     --data '>HBA_HUMAN
+MVLSPADKTNVKAA...' -o hba.a3m
+
+# JSON with all outputs
+curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
+```
+
+Errors are returned as `{"error":"message"}` with an appropriate HTTP status code.
+
 ## Files
 
 | file | role |
 |---|---|
+| `server.mjs` | HTTP API server (`node server.mjs`) |
 | `msa.js` | a3m parsing, the hit->query transfer, pairing |
 | `align.js` | Smith-Waterman / BLOSUM62 -- supplies the alignment BLAST would have |
 | `seeds.js` | minimizer seeding, shared verbatim by builder and browser |
