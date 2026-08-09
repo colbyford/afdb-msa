@@ -190,6 +190,36 @@ curl 'http://localhost:8080/api/msa?seq=MVLSPA...:MVHLT...&format=all'
 
 Errors are returned as `{"error":"message"}` with an appropriate HTTP status code.
 
+## GitHub Pages static API route (no Node)
+
+If you want a GitHub Pages-only deployment, use the static route:
+
+`/api/?seq=<sequence>`
+
+This route lives in `api/index.html` and runs the same client-side pipeline in
+the browser, then prints only the final payload in the page body:
+
+- single chain: plain a3m text
+- multi-chain (default): JSON with one a3m per chain plus `Paired Alignment`
+- `format=paired`: paired a3m text
+- `format=all` or `format=json`: JSON payload
+
+Example:
+
+```text
+https://colbyford.com/afdb-msa/api/?seq=AMQIFVKTLTGKTIT
+```
+
+Important limitations of a static endpoint:
+
+- response headers are still `text/html` (not `application/json` or `text/plain`)
+- HTTP status codes are always page-level (errors are JSON in-body, not 4xx)
+- this still depends on browser network access to Hugging Face and AlphaFold DB
+
+If you need true API headers/status codes for programmatic clients, keep using
+`server.mjs` (or move that logic to a serverless runtime like Cloudflare
+Workers/Netlify Functions).
+
 ## Files
 
 | file | role |
