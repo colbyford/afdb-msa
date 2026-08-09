@@ -229,10 +229,15 @@ node --max-old-space-size=120000 tools/afdb-merge.mjs shards/ index/
 
 About 5 minutes of sharding on 24 cores and 2.5 minutes to merge.
 
+The index is 17 GB and lives on
+[Hugging Face](https://huggingface.co/datasets/sokrypton/afdb-msa-index), which
+serves `206` with `Content-Range` and CORS -- all the client needs. `index.html`
+points at it by default; blank the field and the site falls back to BLAST.
+
 ## Deploying
 
 The web UI is deployed to GitHub Pages by the workflow
-`.github/workflows/nodejs.yaml` on pushes to `main`.
+`.github/workflows/deploy.yaml` on pushes to `main`.
 
 The API (`server.mjs`) is a Node process and is **not** executed by GitHub
 Pages. The workflow still starts it in CI and smoke-tests `/` and `/api`,
@@ -250,10 +255,7 @@ so without it a browser can hold a stale script for ten minutes and pair it with
 a fresh page -- which is worse than either alone, and crashed for real once.
 `test/dom.mjs` fails if a hash is missing or does not match its file.
 
-The index is 17 GB and lives on
-[Hugging Face](https://huggingface.co/datasets/sokrypton/afdb-msa-index), which
-serves `206` with `Content-Range` and CORS -- all the client needs. `index.html`
-points at it by default; blank the field and the site falls back to BLAST.
+The API uses Node.js and thus does not run on GitHub Pages. You must deploy it to a service that supports running Node.js applications.
 
 ## Credits
 
