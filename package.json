@@ -1,0 +1,16 @@
+{
+  "name": "afdb-msa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AFDB MSA web UI and Node API server",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs",
+    "test:dom": "node test/dom.mjs",
+    "test:server": "node test/server-smoke.mjs",
+    "stamp": "node tools/stamp.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
